@@ -19,7 +19,6 @@ jobs:
       changelog: ${{ steps.tag_version.outputs.changelog }}
       src_current_version: ${{ steps.src_current_version.outputs.src_current_version }}
       already_released: ${{ steps.tag_version.outputs.previous_version == steps.src_current_version.outputs.src_current_version }}
-
     steps:
       - uses: actions/checkout@v2
       - name: debug
