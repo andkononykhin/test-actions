@@ -1,0 +1,70 @@
+name: Test pushes to branches
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+
+  testjob1:
+    name: get tags data
+    runs-on: ubuntu-latest
+    outputs:
+      new_tag: ${{ steps.tag_version.outputs.new_tag }}
+      new_version: ${{ steps.tag_version.outputs.new_version }}
+      previous_tag: ${{ steps.tag_version.outputs.previous_tag }}
+      previous_version: ${{ steps.tag_version.outputs.previous_version }}
+      release_type: ${{ steps.tag_version.outputs.release_type }}
+      changelog: ${{ steps.tag_version.outputs.changelog }}
+      src_current_version: ${{ steps.src_current_version.outputs.src_current_version }}
+      already_released: ${{ steps.tag_version.outputs.previous_version == steps.src_current_version.outputs.src_current_version }}
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: debug
+        run: |
+          pwd
+          ls -la
+          cat ./version
+      - name: Get current version
+        id: src_current_version
+        run: echo "::set-output name=src_current_version::$(cat ./version)"
+      - name: Bump version and push tag
+        id: tag_version
+        uses: mathieudutour/github-tag-action@v5.6
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          default_bump: false
+          custom_tag: "${{ steps.src_current_version.outputs.src_current_version }}"
+          dry_run: true
+
+  testjob2:
+    name: dump tags data
+    runs-on: ubuntu-latest
+    needs: testjob1
+    steps:
+      - name: dump tags data
+        run: |
+          ! read -r -d '' msg << EOF
+          payload ${{ toJson(needs.testjob1.outputs) }}
+          EOF
+          echo "$msg"
+
+  testjob3:
+    name: conditional on tags (skipped)
+    runs-on: ubuntu-latest
+    needs: testjob1
+    if: needs.testjob1.outputs.already_released == 'true'
+    steps:
+      - name: just echo
+        run: echo "Conditional doesn't work" && exit 1
+
+  testjob4:
+    name: conditional on tags to fail the pipeline
+    runs-on: ubuntu-latest
+    needs: testjob1
+    if: needs.testjob1.outputs.already_released == 'false'
+    steps:
+      - name: test fail
+        run: exit 1
