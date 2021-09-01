@@ -36,7 +36,7 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           default_bump: false
-          custom_tag: "${{ steps.src_current_version.outputs.src_current_version }}"
+          # custom_tag: "${{ steps.src_current_version.outputs.src_current_version }}"
           dry_run: true
 
   testjob2:
@@ -77,7 +77,7 @@ jobs:
       - name: build dist
         run: |
           mkdir dist
-          touch "dist/testpkg-${{ needs.testjob1.outputs.src_current_version }}-py3-none-any.whl" \
+          echo somedata | tee "dist/testpkg-${{ needs.testjob1.outputs.src_current_version }}-py3-none-any.whl" \
             "dist/testpkg-${{ needs.testjob1.outputs.src_current_version }}.tar.gz"
           ls dist
       - uses: ncipollo/release-action@v1
