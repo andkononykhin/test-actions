@@ -40,16 +40,23 @@ jobs:
           dry_run: true
 
   testjob2:
-    name: dump tags data
+    name: dump data
     runs-on: ubuntu-latest
     needs: testjob1
     steps:
       - name: dump tags data
         run: |
           ! read -r -d '' msg << EOF
-          payload ${{ toJson(needs.testjob1.outputs) }}
+          testjob1 outputs
+          ${{ toJson(needs.testjob1.outputs) }}
+          ====================
+          github context
+          ${{ toJson(github) }}
           EOF
           echo "$msg"
+          echo "===================="
+          echo "environment"
+          env
 
   testjob3:
     name: conditional on tags (skipped)
@@ -61,10 +68,23 @@ jobs:
         run: echo "Conditional doesn't work" && exit 1
 
   testjob4:
-    name: conditional on tags to fail the pipeline
+    name: GitHub Release Python
     runs-on: ubuntu-latest
     needs: testjob1
     if: needs.testjob1.outputs.already_released == 'false'
     steps:
-      - name: test fail
-        run: exit 1
+      - uses: actions/checkout@v2
+      - name: build dist
+        run: |
+          mkdir dist
+          touch "dist/testpkg-${{ needs.testjob1.outputs.src_current_version }}-py3-none-any.whl" \
+            "dist/testpkg-${{ needs.testjob1.outputs.src_current_version }}.tar.gz"
+          ls dist
+      - uses: ncipollo/release-action@v1
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        with:
+          artifacts: "dist/*"
+          tag: ${{ needs.testjob1.outputs.new_tag }}
+          commit: main
+          body: ${{ needs.testjob1.outputs.changelog }}
+          token: ${{ secrets.GITHUB_TOKEN }}
