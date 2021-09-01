@@ -2,21 +2,36 @@ name: Test PRs
 
 on:
   pull_request:
-    branches: [ main, stable ]
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
 
-  testjob1:
-    name: run always
+  testjob0:
+    name: Check version bumped
     runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'main'
     steps:
-      - name: dump github object
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Get current version
+        id: current_version
         run: |
-          ! read -r -d '' msg << EOF
-          payload ${{ toJson(github) }}
-          EOF
-          echo "$msg"
+          out="$(cat ./version)"
+          echo "$out"
+          echo "::set-output name=current_version::$out"
+        shell: bash
+      - name: Get latest tag
+        id: version_latest
+        run: |
+          out="$(git describe --abbrev=0 --tags | cut -d'v' -f 2)"
+          echo "$out"
+          echo "::set-output name=version_latest::$out"
+        shell: bash
+      - name: fail unless bumped
+        if: steps.version_latest.outputs.version_latest == steps.current_version.outputs.current_version
+        run: exit 1
 
   testjob2:
       name: run only for main target
