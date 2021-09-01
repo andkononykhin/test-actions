@@ -1,15 +1,12 @@
 name: Test tag pushes
 
 on:
-  push:
-    tags:
-      - v*
+  release:
+    types: [published]
   workflow_dispatch:
 
 env:
   PKG_NAME: testpkg
-  CURRENT_VERSION: 0.0.4
-
 
 jobs:
 
@@ -17,6 +14,7 @@ jobs:
     name: check in PyPI
     runs-on: ubuntu-latest
     outputs:
+      current_version: ${{ steps.current_version.outputs.current_version }}
       already_in_pypi: ${{ steps.check_in_pypi.outputs.pypi_versions != '' }}
     steps:
       - uses: actions/setup-python@v2
@@ -33,6 +31,9 @@ jobs:
           echo "environment"
           env
       - name: check if already deployed
+        id: current_version
+        run:  echo "::set-output name=current_version::$(echo ${{ env.GITHUB_REF }} | cut -d'v' -f 2)"
+      - name: check if already deployed
         id: check_in_pypi
         # Note. other options:
         #   - use 'pip install --no-deps PKG==VERSION' with current version
@@ -40,7 +41,8 @@ jobs:
         #     (but it's a kind of experimental feature of pip >= 21.2)
         run: |
           python -m pip install --upgrade pip
-          out="$(pip install --use-deprecated=legacy-resolver ${{ env.PKG_NAME }}== 2>&1 | grep -E "Could not find .* ${{ env.CURRENT_VERSION }}(,|\\))")"
+          out="$(pip install --use-deprecated=legacy-resolver ${{ env.PKG_NAME }}== 2>&1 \
+              | grep -E "Could not find .* ${{ steps.current_version.outputs.current_version }}(,|\))")"
           echo "::set-output name=pypi_versions::$out"
         shell: bash {0}  # to opt-out of default fail-fast behavior
 
@@ -55,7 +57,7 @@ jobs:
         run: |
           mkdir -p dist
           cd dist
-          curl -s https://api.github.com/repos/${{ github.repository }}/releases/tags/v${{ env.CURRENT_VERSION }} \
+          curl -s https://api.github.com/repos/${{ github.repository }}/releases/tags/v${{ needs.testjob1.outputs.current_version }} \
             | jq -r ".assets[] | select(.name | contains(\"${{ env.PKG_NAME }}\")) | .browser_download_url" \
             | wget -i -
           ls
