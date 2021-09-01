@@ -84,7 +84,7 @@ jobs:
         if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         with:
           artifacts: "dist/*"
-          tag: ${{ needs.testjob1.outputs.new_tag }}
+          tag: v${{ needs.testjob1.outputs.src_current_version }}
           commit: main
           body: ${{ needs.testjob1.outputs.changelog }}
           token: ${{ secrets.GITHUB_TOKEN }}
