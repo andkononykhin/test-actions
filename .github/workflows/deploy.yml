@@ -3,12 +3,12 @@ name: Test tag pushes
 on:
   push:
     tags:
-      - v*.*.*
+      - v*
   workflow_dispatch:
 
 env:
   PKG_NAME: testpkg
-  CURRENT_VERSION: 0.0.2
+  CURRENT_VERSION: 0.0.4
 
 jobs:
 
@@ -21,6 +21,16 @@ jobs:
       - uses: actions/setup-python@v2
         with:
           python-version: '3.x'
+      - name: dump tags data
+        run: |
+          ! read -r -d '' msg << EOF
+          github context
+          ${{ toJson(github) }}
+          EOF
+          echo "$msg"
+          echo "===================="
+          echo "environment"
+          env
       - name: check if already deployed
         id: check_in_pypi
         # Note. other options:
