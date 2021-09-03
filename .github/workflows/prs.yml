@@ -1,50 +1,37 @@
-name: Test PRs
+name: tests
 
-on:
-  pull_request:
-    branches: [ main ]
-  workflow_dispatch:
+on: [ pull_request ]
+
 
 jobs:
 
-  testjob0:
+  check-version-bumped:
     name: Check version bumped
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'main'
+    if: github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'stable'
     steps:
       - uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
+
       - name: Get current version
         id: current_version
+        run: echo "::set-output name=current_version::$(cat ./version)"
+
+      - name: Get release info
+        id: release_info
         run: |
-          out="$(cat ./version)"
-          echo "$out"
-          echo "::set-output name=current_version::$out"
+          release_info="$(curl -s https://api.github.com/repos/${{ github.repository }}/releases \
+              | jq '.[] | select(.name == "v${{ steps.current_version.outputs.current_version }}")')"
+          echo "::set-output name=release_info::$release_info"
+          echo "$release_info"
         shell: bash
-      - name: Get latest tag
-        id: version_latest
-        run: |
-          out="$(git describe --abbrev=0 --tags | cut -d'v' -f 2)"
-          echo "$out"
-          echo "::set-output name=version_latest::$out"
-        shell: bash
-      - name: fail unless bumped
-        if: steps.version_latest.outputs.version_latest == steps.current_version.outputs.current_version
+
+      - name: fail unless release not found
+        # TODO check if greater than latest tag / release (?)
+        if: steps.release_info.outputs.release_info
         run: exit 1
 
-  testjob2:
-      name: run only for main target
-      if: github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'main'
-      runs-on: ubuntu-latest
-      steps:
-        - name: just echo
-          run: echo "Hello main"
-
-  testjob3:
-      name: run only for stable target
-      if: github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'stable'
-      runs-on: ubuntu-latest
-      steps:
-        - name: just echo
-          run: echo "Hello stable"
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install dependencies
+        run: echo "Done"
