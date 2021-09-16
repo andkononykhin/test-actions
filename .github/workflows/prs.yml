@@ -5,10 +5,30 @@ on: [ pull_request ]
 
 jobs:
 
+  testme:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Echo github obj
+        run: |
+           ! read -r -d '' msg << EOF
+           payload ${{ toJson(env) }}
+           EOF
+           echo "$msg"
+           echo "$GITHUB_SHA"
+           echo "$GITHUB_REF"
+
+      - name: set dev version
+        run: |
+          sed -r "s~version=\"(.+)\"~version=\"\1.dev0+${GITHUB_SHA:0:7}\"~" ./version
+        shell: bash
+
   check-version-bumped:
     name: Check version bumped
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'stable'
+    if: false && github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'stable'
     steps:
       - uses: actions/checkout@v2
 
@@ -31,6 +51,7 @@ jobs:
         run: exit 1
 
   build:
+    if: false
     runs-on: ubuntu-latest
     steps:
       - name: Install dependencies
