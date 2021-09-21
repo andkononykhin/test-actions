@@ -1,0 +1,13 @@
+[package]
+name = "serde"
+version = "0.2.0"
+edition = "2018"
+description = "A short description of my package"
+license = "MIT OR Apache-2.0"
+homepage = "https://aaa.rs/"
+documentation = "https://docs.rs/bitflags"
+readme = "README.md"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
