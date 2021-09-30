@@ -19,6 +19,9 @@ repositories {
     mavenCentral()
 }
 
+group = "test.actions"
+version = "${version}"
+
 dependencies {
     // Align versions of all Kotlin components
     implementation platform('org.jetbrains.kotlin:kotlin-bom')
@@ -37,4 +40,11 @@ dependencies {
 
     // This dependency is exported to consumers, that is to say found on their compile classpath.
     api 'org.apache.commons:commons-math3:3.6.1'
+}
+
+
+task version {
+    doLast {
+        println(version)
+    }
 }
