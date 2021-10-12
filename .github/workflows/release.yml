@@ -11,7 +11,7 @@ on:
         default: '0'
 
 env:
-  PKG_NAME: testpkg
+  PKG_NAME: didcomm
 
 
 jobs:
@@ -60,30 +60,41 @@ jobs:
       - name: check if already deployed to crates.io
         id: check_in_crates_io
         run: |
-          out="$(curl -s https://crates.io/api/v1/crates/${{ env.PKG_NAME }} | jq '.versions[] | .num' \
-            | grep ${{ steps.current_version.outputs.current_version }})"
+          out="$(curl -s https://crates.io/api/v1/crates/${{ env.PKG_NAME }} | jq -r '.versions[] | .num' \
+            | grep '^${{ steps.current_version.outputs.current_version }}$')"
+          echo "in crates.io check: $out"
           echo "::set-output name=already_in_crates_io::$out"
         shell: bash {0}  # to opt-out of default fail-fast behavior
 
-  release-github:
-    name: GitHub Release
+  release:
+    name: Release
     # if: github.ref == 'refs/heads/stable'
     runs-on: ubuntu-latest
     needs: checks
     steps:
       - uses: actions/checkout@v2
 
-      - name: build crate
+      - name: Set rustup profile & toolchain
+        run: |
+          rustup set profile minimal
+          rustup toolchain install stable
+        shell: bash
+
+      - name: package and verify the crate
         id: build_assets
         if: ${{ !needs.checks.outputs.asset_crate_url }}
         run: |
           cargo package
 
+          # TODO verify that it's not more than crates.io limit (10 MB)
+          ls -la target/package
+          cargo package --list
+
           asset_crate_name="$(find target/package -name '*.crate' -printf '%f')"
           echo "::set-output name=asset_crate_name::$asset_crate_name"
         shell: bash
 
-      - name: Create Release
+      - name: Create GitHub Release
         id: create_release
         if: ${{ !needs.checks.outputs.release_info }}
         uses: actions/create-release@v1
@@ -103,7 +114,7 @@ jobs:
             echo "::set-output name=value::${{ steps.create_release.outputs.upload_url }}"
           fi
 
-      - name: Upload the crate
+      - name: Upload to GitHub
         if: ${{ !needs.checks.outputs.asset_crate_url }}
         uses: actions/upload-release-asset@v1
         env:
@@ -114,55 +125,45 @@ jobs:
           asset_name: ${{ steps.build_assets.outputs.asset_crate_name }}
           asset_content_type: application/octet-stream  # TODO check for less generic type
 
-  deploy-crates-io:
-    name: Deploy to crates.io
-    if: github.ref == 'refs/heads/stable' && needs.checks.outputs.already_in_crates_io == 'false'
-    runs-on: ubuntu-latest
-    needs: [checks, release-github]
-    steps:
-      - uses: actions/checkout@v2
-
-      - name: download GitHub artifacts
-        run: |
-          mkdir -p target/package
-          cd target/package
-          curl -s https://api.github.com/repos/${{ github.repository }}/releases/tags/v${{ needs.checks.outputs.current_version }} \
-            | jq -r ".assets[] | select(.name | contains(\"${{ env.PKG_NAME }}\")) | .browser_download_url" \
-            | wget -i -
-          ls -la
-        shell: bash
-
+      # NOTE looks like there is no option to skip packaging here
+      #      and use already prepared artifacts
       - name: Publish to crates.io
+        if: needs.checks.outputs.already_in_crates_io == 'false'
         env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: |
-          cargo login
-          cargo publish
+          CARGO_REGISTRY_TOKEN: testme
+        run: cargo publish
         shell: bash
+
 
   deploy-dev-crates-io:
-    name: Deploy dev to crates.io
+    name: Publish dev to crates.io
     if: github.ref != 'refs/heads/stable' && github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
 
+      - name: Set rustup profile & toolchain
+        run: |
+          rustup set profile minimal
+          rustup toolchain install stable
+        shell: bash
+
       - name: set dev version
         run: |
-          sed -i -r "s~^version = '(.+)'~version = '\1-0.dev.${{ github.event.inputs.devN }}'~" ./Cargo.toml
+          sed -i -r "s~^version = (['\"])(.+)['\"]~version = \1\2-0.dev.${{ github.event.inputs.devN }}\1~" ./Cargo.toml
           grep version ./Cargo.toml
         shell: bash
 
-      - name: build & publish
+      - name: verify the package
         run: |
           cargo package --allow-dirty
           ls -la target/package
+          cargo package --allow-dirty --list
         shell: bash
 
-      - name: Publish to crates.io
+      - name: publish
+        if: false
         env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: |
-          cargo login
-          cargo publish --allow-dirty
+          CARGO_REGISTRY_TOKEN: testme
+        run: cargo publish --allow-dirty
         shell: bash
