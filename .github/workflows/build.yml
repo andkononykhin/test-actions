@@ -5,7 +5,7 @@ on:
 
 
 env:
-  PKG_NAME: testpkg
+  PKG_NAME: didcomm
 
 
 jobs:
@@ -24,6 +24,13 @@ jobs:
             | jq -r '.packages[] | select(.name == "${{ env.PKG_NAME }}") | .version')"
           echo "$version"
           echo "::set-output name=current_version::$version"
+
+          cd wasm
+          version="$(cargo -q metadata --no-deps \
+            | jq -r '.packages[] | select(.name == "${{ env.PKG_NAME }}") | .version')"
+          echo "$version"
+          echo "::set-output name=current_wasm_version::$version"
+
         shell: bash
 
       # TODO improve (DRY): copy-paste from release.yml
@@ -41,13 +48,37 @@ jobs:
         if: steps.release_info.outputs.release_info
         run: exit 1
 
-      - name: check it can be packaged
+      - name: check rust and wasm versions are the same
+        if: steps.current_version.outputs.current_version != steps.current_version.outputs.current_wasm_version
+        run: exit 1
+
+      - name: check it can be packaged (crate)
         run: |
           cargo package
           # TODO verify that it's not more than crates.io limit (10 MB)
           ls -la target/package
           cargo package --list
         shell: bash
+
+      - name: check it can be packaged (npm)
+        run: |
+          curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+          cd wasm
+
+          wasm-pack build --target bundler
+          pushd pkg
+          npm install .
+          popd
+          rm -rf pkg
+
+          wasm-pack build --target nodejs
+          pushd pkg
+          npm install .
+          popd
+          rm -rf pkg
+        shell: bash
+
+
 
   build:
     name: Run Checks
@@ -64,6 +95,10 @@ jobs:
         run: |
           rustup set profile minimal
           rustup toolchain install stable
+        shell: bash
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
         shell: bash
 
       - name: Get timestamp for cache
