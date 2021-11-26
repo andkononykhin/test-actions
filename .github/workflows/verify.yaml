@@ -1,0 +1,173 @@
+name: verify
+
+on:
+  pull_request:
+
+
+env:
+  PKG_NAME: didcomm
+
+
+jobs:
+
+  release-ready:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    # && github.event.pull_request.base.ref == 'stable'
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Get current version
+        id: current_version
+        run: |
+          version="$(cargo -q metadata --no-deps \
+            | jq -r '.packages[] | select(.name == "${{ env.PKG_NAME }}") | .version')"
+          echo "$version"
+          echo "::set-output name=current_version::$version"
+
+          cd wasm
+          version="$(cargo -q metadata --no-deps \
+            | jq -r '.packages[] | select(.name == "${{ env.PKG_NAME }}") | .version')"
+          echo "$version"
+          echo "::set-output name=current_wasm_version::$version"
+        shell: bash
+
+      - name: Check version format
+        run: |
+          # verify the version has "MAJOR.MINOR.PATCH" parts only
+          echo "${{ steps.current_version.outputs.current_version }}" | grep -e '^[0-9]\+\.[0-9]\+\.[0-9]\+$'
+        shell: bash
+
+      # TODO improve (DRY): copy-paste from release.yml
+      - name: Get release info
+        id: release_info
+        run: |
+          release_info="$(curl -s https://api.github.com/repos/${{ github.repository }}/releases \
+              | jq '.[] | select(.name == "v${{ steps.current_version.outputs.current_version }}")')"
+          echo "::set-output name=release_info::$release_info"
+          echo "$release_info"
+        shell: bash
+
+      - name: check version bumped
+        # TODO check if greater than latest tag / release (?)
+        if: steps.release_info.outputs.release_info
+        run: exit 1
+
+      - name: check rust and wasm versions are the same
+        if: steps.current_version.outputs.current_version != steps.current_version.outputs.current_wasm_version
+        run: exit 1
+
+      - name: check it can be packaged (crate)
+        run: |
+          cargo package
+          # TODO verify that it's not more than crates.io limit (10 MB)
+          ls -la target/package
+          cargo package --list
+        shell: bash
+
+      - name: check it can be packaged (npm)
+        run: |
+          curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+          cd wasm
+
+          wasm-pack build --target bundler
+          pushd pkg
+          npm install .
+          popd
+          rm -rf pkg
+
+          wasm-pack build --target nodejs
+          pushd pkg
+          npm install .
+          popd
+          rm -rf pkg
+        shell: bash
+
+  verify:
+    strategy:
+      matrix:
+        os: [ macos-latest, windows-latest, ubuntu-latest ]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Set rustup profile & toolchain
+        run: |
+          rustup set profile minimal
+          rustup toolchain install stable
+        shell: bash
+
+      - name: Get timestamp for cache
+        id: date
+        run: echo ::set-output name=yearmo::$(date +%Y%m)
+      - uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}-${{steps.date.outputs.yearmo}}
+
+      - name: Cargo fmt
+        # TODO enable that once https://github.com/rust-lang/rustfmt/issues/4477
+        #      is resolved
+        if: runner.os != 'Windows'
+        run: cargo fmt --all -- --check
+
+      - name: Debug build
+        run: cargo build --verbose
+
+      - name: Test
+        run: cargo test --verbose
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: 16
+          cache: npm
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+        shell: bash
+
+      - name: Build pkg (nodejs)
+        run: |
+          cd wasm && rm -rf
+          wasm-pack build --target nodejs
+        shell: bash
+
+      - name: Lint test-js (nodejs)
+        run: |
+          cd wasm/test-js
+          npm install  
+          npm run check  
+        shell: bash
+
+      - name: Test test-js (nodejs)
+        run: |
+          cd wasm/test-js
+          npm test
+        shell: bash
+
+      - name: Test test-js in browser (nodejs)
+        run: |
+          cd wasm/demo
+          npm run test-puppeter
+        shell: bash
+
+      - name: Lint demo (nodejs)
+        run: |
+          cd wasm/demo
+          npm install  
+          npm run check  
+        shell: bash
+
+      - name: Test demo (nodejs)
+        run: |
+          cd wasm/demo
+          npm run start
+        shell: bash
