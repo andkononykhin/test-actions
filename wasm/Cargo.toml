@@ -1,6 +1,6 @@
 [package]
-name = "didcomm-js"
-version = "0.1.0"
+name = "didcomm"
+version = "0.9.0"
 authors = ["test"]
 edition = "2018"
 description = "A short description of my package"

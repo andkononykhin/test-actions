@@ -1,6 +1,6 @@
 [package]
 name = "didcomm"
-version = "0.1.0-0.dev.0"
+version = "0.9.0"
 edition = "2018"
 description = "A short description of my package"
 license = "MIT OR Apache-2.0"
