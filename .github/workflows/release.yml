@@ -1,31 +1,25 @@
 name: release
 
 on:
-  push:
-    branches: test-crates-io
+  release:
+    types: [published]
   workflow_dispatch:
-    inputs:
-      devN:
-        description: 'development release number'
-        required: false
-        default: '0'
+
 
 env:
-  PKG_NAME: didcomm
+  BIN_NAME: testme
 
 
 jobs:
 
   checks:
-    name: check releases
-    # if: github.ref == 'refs/heads/stable'
+    name: verify release
     runs-on: ubuntu-latest
     outputs:
       current_version: ${{ steps.current_version.outputs.current_version }}
       release_info: ${{ steps.release_info.outputs.release_info }}
-      asset_crate_url: ${{ steps.release_info.outputs.asset_crate_url }}
+      asset_bin_url: ${{ steps.release_info.outputs.asset_bin_url }}
       upload_url:  ${{ steps.release_info.outputs.upload_url }}
-      already_in_crates_io: ${{ steps.check_in_crates_io.outputs.already_in_crates_io != '' }}
 
     steps:
       - uses: actions/checkout@v2
@@ -33,9 +27,11 @@ jobs:
       - name: Get current version
         id: current_version
         run: |
-          version="$(cargo -q metadata --no-deps \
-            | jq -r '.packages[] | select(.name == "${{ env.PKG_NAME }}") | .version')"
+          tag="$(git describe --tags --exact-match)"
+          echo "$tag"
+          version="$(echo "$tag" | sed "s/^v//")"
           echo "$version"
+
           echo "::set-output name=current_version::$version"
         shell: bash
 
@@ -47,123 +43,60 @@ jobs:
           echo "::set-output name=release_info::$release_info"
           echo "$release_info"
 
-          asset_crate_url="$(echo "$release_info" \
-              | jq -r '.assets[] | select(.name | match("^${{ env.PKG_NAME }}.*\\.crate$")) | .browser_download_url')"
-          echo "::set-output name=asset_crate_url::$asset_crate_url"
-          echo "$asset_crate_url"
+          asset_bin_url="$(echo "$release_info" \
+              | jq -r '.assets[] | select(.name | match("^${{ env.BIN_NAME }}$")) | .browser_download_url')"
+          echo "::set-output name=asset_bin_url::$asset_bin_url"
+          echo "$asset_bin_url"
 
           upload_url="$(echo "$release_info" | jq -r '.upload_url')"
           echo "::set-output name=upload_url::$upload_url"
           echo "$upload_url"
         shell: bash
 
-      - name: check if already deployed to crates.io
-        id: check_in_crates_io
-        run: |
-          out="$(curl -s https://crates.io/api/v1/crates/${{ env.PKG_NAME }} | jq -r '.versions[] | .num' \
-            | grep '^${{ steps.current_version.outputs.current_version }}$')"
-          echo "in crates.io check: $out"
-          echo "::set-output name=already_in_crates_io::$out"
-        shell: bash {0}  # to opt-out of default fail-fast behavior
+      - name: check release published
+        if: ${{ !steps.release_info.outputs.release_info }}
+        run: exit 1
+
 
   release:
     name: Release
-    # if: github.ref == 'refs/heads/stable'
-    runs-on: ubuntu-latest
     needs: checks
+    if: ${{ !needs.checks.outputs.asset_bin_url }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
 
-      - name: Set rustup profile & toolchain
-        run: |
-          rustup set profile minimal
-          rustup toolchain install stable
-        shell: bash
-
-      - name: package and verify the crate
-        id: build_assets
-        if: ${{ !needs.checks.outputs.asset_crate_url }}
-        run: |
-          cargo package
-
-          # TODO verify that it's not more than crates.io limit (10 MB)
-          ls -la target/package
-          cargo package --list
-
-          asset_crate_name="$(find target/package -name '*.crate' -printf '%f')"
-          echo "::set-output name=asset_crate_name::$asset_crate_name"
-        shell: bash
-
-      - name: Create GitHub Release
-        id: create_release
-        if: ${{ !needs.checks.outputs.release_info }}
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set up Go 1.x
+        uses: actions/setup-go@v2
         with:
-          tag_name: v${{ needs.checks.outputs.current_version }}
-          release_name: v${{ needs.checks.outputs.current_version }}
+          go-version: ^1.13
 
-      - name: Set upload url
-        id: upload_url
-        if: ${{ !needs.checks.outputs.asset_crate_url }}
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v2
+
+      - uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: build binary
+        id: build_assets_bin
         run: |
-          if [[ -n "${{ needs.checks.outputs.upload_url }}" ]]; then
-            echo "::set-output name=value::${{ needs.checks.outputs.upload_url }}"
-          else
-            echo "::set-output name=value::${{ steps.create_release.outputs.upload_url }}"
-          fi
+          mkdir -p build
+          go build -mod=readonly -o build/${{ env.BIN_NAME }} ./cmd/main.go
+        shell: bash
 
-      - name: Upload to GitHub
-        if: ${{ !needs.checks.outputs.asset_crate_url }}
+      - name: upload to GitHub
+        if: ${{ !needs.checks.outputs.asset_bin_url }}
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ steps.upload_url.outputs.value }}
-          asset_path: target/package/${{ steps.build_assets.outputs.asset_crate_name }}
-          asset_name: ${{ steps.build_assets.outputs.asset_crate_name }}
+          upload_url: ${{ needs.checks.outputs.upload_url }}
+          asset_path: build/${{ env.BIN_NAME }}
+          asset_name: ${{ env.BIN_NAME }}
           asset_content_type: application/octet-stream  # TODO check for less generic type
-
-      # NOTE looks like there is no option to skip packaging here
-      #      and use already prepared artifacts
-      - name: Publish to crates.io
-        if: needs.checks.outputs.already_in_crates_io == 'false'
-        env:
-          CARGO_REGISTRY_TOKEN: testme
-        run: cargo publish
-        shell: bash
-
-
-  deploy-dev-crates-io:
-    name: Publish dev to crates.io
-    if: github.ref != 'refs/heads/stable' && github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-
-      - name: Set rustup profile & toolchain
-        run: |
-          rustup set profile minimal
-          rustup toolchain install stable
-        shell: bash
-
-      - name: set dev version
-        run: |
-          sed -i -r "s~^version = (['\"])(.+)['\"]~version = \1\2-0.dev.${{ github.event.inputs.devN }}\1~" ./Cargo.toml
-          grep version ./Cargo.toml
-        shell: bash
-
-      - name: verify the package
-        run: |
-          cargo package --allow-dirty
-          ls -la target/package
-          cargo package --allow-dirty --list
-        shell: bash
-
-      - name: publish
-        if: false
-        env:
-          CARGO_REGISTRY_TOKEN: testme
-        run: cargo publish --allow-dirty
-        shell: bash
