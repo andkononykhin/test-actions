@@ -20,6 +20,7 @@ jobs:
       release_info: ${{ steps.release_info.outputs.release_info }}
       asset_bin_url: ${{ steps.release_info.outputs.asset_bin_url }}
       asset_ubuntu_tgz_url: ${{ steps.release_info.outputs.asset_ubuntu_tgz_url }}
+      asset_macos_tgz_url: ${{ steps.release_info.outputs.asset_macos_tgz_url }}
       upload_url:  ${{ steps.release_info.outputs.upload_url }}
 
     steps:
