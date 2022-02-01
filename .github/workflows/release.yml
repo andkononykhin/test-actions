@@ -8,6 +8,8 @@ on:
 
 env:
   BIN_NAME: testme
+  TGZ_NAME_UBUNTU: testme.ubuntu.tar.gz
+  TGZ_NAME_MACOS: testme.macos.tar.gz
 
 
 jobs:
@@ -19,6 +21,7 @@ jobs:
       current_version: ${{ steps.current_version.outputs.current_version }}
       release_info: ${{ steps.release_info.outputs.release_info }}
       asset_bin_url: ${{ steps.release_info.outputs.asset_bin_url }}
+      asset_ubuntu_tgz_url: ${{ steps.release_info.outputs.asset_ubuntu_tgz_url }}
       upload_url:  ${{ steps.release_info.outputs.upload_url }}
 
     steps:
@@ -50,6 +53,16 @@ jobs:
           echo "::set-output name=asset_bin_url::$asset_bin_url"
           echo "$asset_bin_url"
 
+          asset_ubuntu_tgz_url="$(echo "$release_info" \
+              | jq -r '.assets[] | select(.name | match("^${{ env.TGZ_NAME_UBUNTU }}$")) | .browser_download_url')"
+          echo "::set-output name=asset_ubuntu_tgz_url::$asset_ubuntu_tgz_url"
+          echo "$asset_ubuntu_tgz_url"
+
+          asset_macos_tgz_url="$(echo "$release_info" \
+              | jq -r '.assets[] | select(.name | match("^${{ env.TGZ_NAME_MACOS }}$")) | .browser_download_url')"
+          echo "::set-output name=asset_macos_tgz_url::$asset_macos_tgz_url"
+          echo "$asset_macos_tgz_url"
+
           upload_url="$(echo "$release_info" | jq -r '.upload_url')"
           echo "::set-output name=upload_url::$upload_url"
           echo "$upload_url"
@@ -61,10 +74,20 @@ jobs:
 
 
   release:
-    name: Release
-    needs: checks
-    if: ${{ !needs.checks.outputs.asset_bin_url }}
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ ubuntu-20.04, macos-11 ]
+        include:
+          - os: ubuntu-20.04
+            asset_bin_needed: ${{ !needs.checks.outputs.asset_bin_url }}
+            asset_tgz_needed: ${{ !needs.checks.outputs.asset_ubuntu_tgz_url }}
+            asset_tgz_name: ${{ env.TGZ_NAME_UBUNTU }}
+          - os: macos-11
+            asset_bin_needed: false
+            asset_tgz_needed: ${{ !needs.checks.outputs.asset_macos_tgz_url }}
+            asset_tgz_name: ${{ env.TGZ_NAME_MACOS }}
+    if: matrix.asset_bin_needed || matrix.asset_tgz_needed
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v2
 
@@ -86,14 +109,13 @@ jobs:
             ${{ runner.os }}-go-
 
       - name: build binary
-        id: build_assets_bin
         run: |
-          mkdir -p build
           go build -mod=readonly -o build/${{ env.BIN_NAME }} ./cmd/main.go
+          tar czf build/${{ matrix.asset_tgz_name }} -C build ${{ env.BIN_NAME }}
         shell: bash
 
-      - name: upload to GitHub
-        if: ${{ !needs.checks.outputs.asset_bin_url }}
+      - name: upload to GitHub (${{ matrix.os }}, binary)
+        if: matrix.asset_bin_needed
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -102,3 +124,14 @@ jobs:
           asset_path: build/${{ env.BIN_NAME }}
           asset_name: ${{ env.BIN_NAME }}
           asset_content_type: application/octet-stream  # TODO check for less generic type
+
+      - name: upload to GitHub (${{ matrix.os }}, archived binary)
+        if: matrix.asset_tgz_needed
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.checks.outputs.upload_url }}
+          asset_path: build/${{ matrix.asset_tgz_name }}
+          asset_name: ${{ matrix.asset_tgz_name }}
+          asset_content_type: application/x-gtar
