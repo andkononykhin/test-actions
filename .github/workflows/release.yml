@@ -113,6 +113,8 @@ jobs:
         if: ${{ matrix.asset_bin_needed || matrix.asset_tgz_needed }}
         run: |
           go build -mod=readonly -o build/${{ env.BIN_NAME }} ./cmd/main.go
+          build/${{ env.BIN_NAME }} version
+
           tar czf build/${{ env.BIN_NAME }}${{ matrix.asset_tgz_name_suffix }} -C build ${{ env.BIN_NAME }}
         shell: bash
 
