@@ -22,7 +22,8 @@ jobs:
       asset_ubuntu_tgz_url: ${{ steps.release_info.outputs.asset_ubuntu_tgz_url }}
       asset_macos_tgz_url: ${{ steps.release_info.outputs.asset_macos_tgz_url }}
       asset_service_url: ${{ steps.release_info.outputs.asset_service_url }}
-      excluded: ${{ steps.release_info.outputs.excluded }}
+      included: ${{ steps.release_info.outputs.included }}
+      matrix_os: ${{ steps.release_info.outputs.matrix_os }}
       upload_url:  ${{ steps.release_info.outputs.upload_url }}
 
     steps:
@@ -73,18 +74,32 @@ jobs:
           echo "::set-output name=upload_url::$upload_url"
           echo "$upload_url"
 
-          excluded=()
-          if [[ -n "$asset_bin_url" && -n "$asset_ubuntu_tgz_url" && -n "$asset_service_url" ]]; then
-            excluded+=("ubuntu-20.04")
+          included=()
+          if [[ -z "$asset_bin_url" || -z "$asset_ubuntu_tgz_url" || -z "$asset_service_url" ]]; then
+            included+=("ubuntu-20.04|$asset_bin_url|$asset_ubuntu_tgz_url|$asset_service_url|.ubuntu.tar.gz")
+          fi
+          if [[ -z "$asset_macos_tgz_url" ]]; then
+            included+=("macos-11|-||-|.macos.tar.gz")
           fi
 
-          if [[ -n "$asset_macos_tgz_url" ]]; then
-            excluded+=("macos-11")
-          fi
+          matrix_os="$(jq -nR '
+              (input | split(" ")) |
+              [ .[] | split("|") | .[0] ] | if .|length > 0 then . else empty end
+            ' <<<"${included[*]}"
+          )"
+          echo "::set-output name=matrix_os::$matrix_os"
+          echo "$matrix_os"
 
-          excluded_json="$(jq -ncR '(input | split(" ")) | [ .[] | {"os": .}]' <<<"${excluded[*]}")"
-          echo "::set-output name=excluded::$excluded_json"
-          echo "$excluded_json"
+          if [[ -n "$matrix_os" ]]; then
+            included_json="$(jq -ncR '
+                (input | split(" ")) |
+                [ .[] | split("|") |
+                {"os": .[0], "bin": .[1] | length, "tgz": .[2] | length, "service": .[3] | length, "tgz_name_suffix": .[4]} ]
+              ' <<<"${included[*]}"
+            )"
+            echo "::set-output name=included::$included_json"
+            echo "$included_json"
+          fi
 
         shell: bash
 
@@ -96,21 +111,11 @@ jobs:
   release:
     name: Release
     needs: checks
+    if: needs.checks.outputs.matrix_os
     strategy:
       matrix:
-        os: [ ubuntu-20.04, macos-11 ]
-        include:
-          - os: ubuntu-20.04
-            asset_bin_needed: ${{ !needs.checks.outputs.asset_bin_url }}
-            asset_tgz_needed: ${{ !needs.checks.outputs.asset_ubuntu_tgz_url }}
-            asset_tgz_name_suffix: .ubuntu.tar.gz
-            asset_service_needed: ${{ !needs.checks.outputs.asset_service_url }}
-          - os: macos-11
-            asset_bin_needed: false
-            asset_tgz_needed: ${{ !needs.checks.outputs.asset_macos_tgz_url }}
-            asset_tgz_name_suffix: .macos.tar.gz
-            asset_service_needed: false
-        exclude: ${{ fromJson(needs.checks.outputs.excluded) }}
+        os: ${{ fromJson(needs.checks.outputs.matrix_os) }}
+        include: ${{ fromJson(needs.checks.outputs.included) }}
     runs-on: ${{ matrix.os }}
     steps:
       - name: Set up Go 1.x
@@ -131,16 +136,16 @@ jobs:
             ${{ runner.os }}-go-
 
       - name: build binary
-        if: ${{ matrix.asset_bin_needed || matrix.asset_tgz_needed }}
+        if: ${{ !matrix.bin || !matrix.tgz }}
         run: |
           go build -mod=readonly -o build/${{ env.BIN_NAME }} ./cmd/main.go
           build/${{ env.BIN_NAME }} version
 
-          tar czf build/${{ env.BIN_NAME }}${{ matrix.asset_tgz_name_suffix }} -C build ${{ env.BIN_NAME }}
+          tar czf build/${{ env.BIN_NAME }}${{ matrix.tgz_name_suffix }} -C build ${{ env.BIN_NAME }}
         shell: bash
 
       - name: upload to GitHub (binary)
-        if: matrix.asset_bin_needed
+        if: ${{ !matrix.bin }}
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -151,18 +156,18 @@ jobs:
           asset_content_type: application/octet-stream  # TODO check for less generic type
 
       - name: upload to GitHub (archived binary)
-        if: matrix.asset_tgz_needed
+        if: ${{ !matrix.tgz }}
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.checks.outputs.upload_url }}
-          asset_path: build/${{ env.BIN_NAME }}${{ matrix.asset_tgz_name_suffix }}
-          asset_name: ${{ env.BIN_NAME }}${{ matrix.asset_tgz_name_suffix }}
+          asset_path: build/${{ env.BIN_NAME }}${{ matrix.tgz_name_suffix }}
+          asset_name: ${{ env.BIN_NAME }}${{ matrix.tgz_name_suffix }}
           asset_content_type: application/x-gtar
 
       - name: upload to GitHub (service file)
-        if: matrix.asset_service_needed
+        if: ${{ !matrix.service }}
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
