@@ -21,6 +21,8 @@ jobs:
       asset_bin_url: ${{ steps.release_info.outputs.asset_bin_url }}
       asset_ubuntu_tgz_url: ${{ steps.release_info.outputs.asset_ubuntu_tgz_url }}
       asset_macos_tgz_url: ${{ steps.release_info.outputs.asset_macos_tgz_url }}
+      asset_service_url: ${{ steps.release_info.outputs.asset_service_url }}
+      excluded: ${{ steps.release_info.outputs.excluded }}
       upload_url:  ${{ steps.release_info.outputs.upload_url }}
 
     steps:
@@ -57,6 +59,11 @@ jobs:
           echo "::set-output name=asset_ubuntu_tgz_url::$asset_ubuntu_tgz_url"
           echo "$asset_ubuntu_tgz_url"
 
+          asset_service_url="$(echo "$release_info" \
+              | jq -r '.assets[] | select(.name | match("^${{ env.BIN_NAME }}.service$")) | .browser_download_url')"
+          echo "::set-output name=asset_service_url::$asset_service_url"
+          echo "$asset_service_url"
+
           asset_macos_tgz_url="$(echo "$release_info" \
               | jq -r '.assets[] | select(.name | match("^${{ env.BIN_NAME }}.macos.tar.gz$")) | .browser_download_url')"
           echo "::set-output name=asset_macos_tgz_url::$asset_macos_tgz_url"
@@ -65,6 +72,20 @@ jobs:
           upload_url="$(echo "$release_info" | jq -r '.upload_url')"
           echo "::set-output name=upload_url::$upload_url"
           echo "$upload_url"
+
+          excluded=()
+          if [[ -n "$asset_bin_url" && -n "$asset_ubuntu_tgz_url" && -n "$asset_service_url" ]]; then
+            excluded+=("ubuntu-20.04")
+          fi
+
+          if [[ -n "$asset_macos_tgz_url" ]]; then
+            excluded+=("macos-11")
+          fi
+
+          excluded_json="$(jq -ncR '(input | split(" ")) | [ .[] | {"os": .}]' <<<"${excluded[*]}")"
+          echo "::set-output name=excluded::$excluded_json"
+          echo "$excluded_json"
+
         shell: bash
 
       - name: check release published
@@ -83,24 +104,24 @@ jobs:
             asset_bin_needed: ${{ !needs.checks.outputs.asset_bin_url }}
             asset_tgz_needed: ${{ !needs.checks.outputs.asset_ubuntu_tgz_url }}
             asset_tgz_name_suffix: .ubuntu.tar.gz
+            asset_service_needed: ${{ !needs.checks.outputs.asset_service_url }}
           - os: macos-11
             asset_bin_needed: false
             asset_tgz_needed: ${{ !needs.checks.outputs.asset_macos_tgz_url }}
             asset_tgz_name_suffix: .macos.tar.gz
+            asset_service_needed: false
+        exclude: ${{ fromJson(needs.checks.outputs.excluded) }}
     runs-on: ${{ matrix.os }}
     steps:
       - name: Set up Go 1.x
-        if: ${{ matrix.asset_bin_needed || matrix.asset_tgz_needed }}  # ??? looks no way to filter that on job level
         uses: actions/setup-go@v2
         with:
           go-version: ^1.13
 
       - name: Check out code into the Go module directory
-        if: ${{ matrix.asset_bin_needed || matrix.asset_tgz_needed }}
         uses: actions/checkout@v2
 
       - uses: actions/cache@v2
-        if: ${{ matrix.asset_bin_needed || matrix.asset_tgz_needed }}
         with:
           path: |
             ~/.cache/go-build
@@ -139,3 +160,14 @@ jobs:
           asset_path: build/${{ env.BIN_NAME }}${{ matrix.asset_tgz_name_suffix }}
           asset_name: ${{ env.BIN_NAME }}${{ matrix.asset_tgz_name_suffix }}
           asset_content_type: application/x-gtar
+
+      - name: upload to GitHub (service file)
+        if: matrix.asset_service_needed
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.checks.outputs.upload_url }}
+          asset_path: cmd/${{ env.BIN_NAME }}.service
+          asset_name: ${{ env.BIN_NAME }}.service
+          asset_content_type: text/plain
