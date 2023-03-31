@@ -6,6 +6,12 @@ import 'source-map-support/register';
 
 import { CodePipeline, CodePipelineSource, ShellStep } from 'aws-cdk-lib/pipelines';
 
+declare var process : {
+    env: {
+       CODEBUILD_WEBHOOK_TRIGGER: string
+    }
+}
+
 
 export class MyPipelineStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -14,10 +20,10 @@ export class MyPipelineStack extends cdk.Stack {
     const pipeline = new CodePipeline(this, 'Pipeline', {
       pipelineName: 'MyPipeline',
       synth: new ShellStep('Synth', {
-        input: CodePipelineSource.gitHub('andkononykhin/test-actions', 'main', {
+        input: CodePipelineSource.gitHub('andkononykhin/test-actions', process.env['CODEBUILD_WEBHOOK_TRIGGER'], {
          authentication: cdk.SecretValue.secretsManager('github-access-token-secret'),
         }),
-        commands: ['find .']
+        commands: ['npm ci', 'npm run build', 'npx cdk synth']
       })
     });
   }
