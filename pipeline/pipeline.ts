@@ -23,7 +23,7 @@ export class MyPipelineStack extends cdk.Stack {
         input: CodePipelineSource.gitHub('andkononykhin/test-actions', process.env['CODEBUILD_WEBHOOK_TRIGGER'], {
          authentication: cdk.SecretValue.secretsManager('github-access-token-secret'),
         }),
-        commands: ['npm ci', 'npm run build', 'npx cdk synth']
+        commands: ['cd pipeline', 'npm ci', 'npm run build', 'npx cdk synth']
       })
     });
   }
