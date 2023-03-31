@@ -1,7 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 //import { PolicyStatement } from "aws-cdk-lib/aws-iam"
-import { Function, Runtime, AssetCode, Code, FunctionUrlAuthType } from "aws-cdk-lib/aws-lambda"
+import { Function, InlineCode, Runtime, AssetCode, Code, FunctionUrlAuthType } from "aws-cdk-lib/aws-lambda"
 import 'source-map-support/register';
 
 import { CodePipeline, CodePipelineSource, ShellStep } from 'aws-cdk-lib/pipelines';
@@ -9,6 +9,29 @@ import { CodePipeline, CodePipelineSource, ShellStep } from 'aws-cdk-lib/pipelin
 declare var process : {
     env: {
        CODEBUILD_WEBHOOK_TRIGGER: string
+    }
+}
+
+
+export class MyLambdaStack extends cdk.Stack {
+    constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+      super(scope, id, props);
+
+      new Function(this, 'LambdaFunction', {
+        runtime: Runtime.NODEJS_12_X,
+        handler: 'index.handler',
+        code: new InlineCode('exports.handler = _ => "Hello, CDK";')
+      });
+    }
+}
+
+
+export class MyPipelineAppStage extends cdk.Stage {
+
+    constructor(scope: Construct, id: string, props?: cdk.StageProps) {
+      super(scope, id, props);
+
+      const lambdaStack = new MyLambdaStack(this, 'LambdaStack');
     }
 }
 
@@ -27,6 +50,10 @@ export class MyPipelineStack extends cdk.Stack {
         primaryOutputDirectory: 'pipeline/cdk.out' // ref: https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.pipelines-readme.html#synth-and-sources
       })
     });
+
+    pipeline.addStage(new MyPipelineAppStage(this, "test", {
+      env: { account: "111111111111", region: "eu-west-1" }
+    }));
   }
 }
 
@@ -37,33 +64,6 @@ app.synth();
 
 
 /*
-
-import { Construct } from 'constructs';
-import { Function, InlineCode, Runtime } from 'aws-cdk-lib/aws-lambda';
-
-export class MyLambdaStack extends cdk.Stack {
-    constructor(scope: Construct, id: string, props?: cdk.StackProps) {
-      super(scope, id, props);
-  
-      new Function(this, 'LambdaFunction', {
-        runtime: Runtime.NODEJS_12_X,
-        handler: 'index.handler',
-        code: new InlineCode('exports.handler = _ => "Hello, CDK";')
-      });
-    }
-}
-
-import { Construct } from "constructs";
-import { MyLambdaStack } from './my-pipeline-lambda-stack';
-
-export class MyPipelineAppStage extends cdk.Stage {
-    
-    constructor(scope: Construct, id: string, props?: cdk.StageProps) {
-      super(scope, id, props);
-  
-      const lambdaStack = new MyLambdaStack(this, 'LambdaStack');      
-    }
-}
 
 import { Construct } from 'constructs';
 import { CodePipeline, CodePipelineSource, ShellStep } from 'aws-cdk-lib/pipelines';
