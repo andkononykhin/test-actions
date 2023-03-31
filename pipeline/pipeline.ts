@@ -23,7 +23,8 @@ export class MyPipelineStack extends cdk.Stack {
         input: CodePipelineSource.gitHub('andkononykhin/test-actions', process.env['CODEBUILD_WEBHOOK_TRIGGER'], {
          authentication: cdk.SecretValue.secretsManager('github-access-token-secret'),
         }),
-        commands: ['cd pipeline', 'npm ci', 'npm run build', 'npx cdk synth']
+        commands: ['cd pipeline', 'npm ci', 'npm run build', 'npx cdk synth'],
+        primaryOutputDirectory: 'pipeline/cdk.out' // ref: https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.pipelines-readme.html#synth-and-sources
       })
     });
   }
