@@ -12,7 +12,9 @@ const codePipelineDir = 'codepipeline'
 const repoMatch = process.env['CODEBUILD_SOURCE_REPO_URL']?.match(/:\/*(.*)/)
 
 if (repoMatch == null) {
-    throw new Error(`repo url has unexpected format: ${process.env['CODEBUILD_SOURCE_REPO_URL']}`);
+    throw new Error(
+        `repo url has unexpected format: ${process.env['CODEBUILD_SOURCE_REPO_URL']}, env: ${JSON.stringify(process.env)}`
+    );
 }
 const repo = repoMatch[1].replace('.git', '');
 if (repo != theRepo) {
