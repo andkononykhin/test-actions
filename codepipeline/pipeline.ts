@@ -6,10 +6,33 @@ import 'source-map-support/register';
 
 import { CodePipeline, CodePipelineSource, ShellStep } from 'aws-cdk-lib/pipelines';
 
-declare var process : {
-    env: {
-       CODEBUILD_WEBHOOK_TRIGGER: string
-    }
+const theRepo = 'andkononykhin/test-actions'
+const codePipelineDir = 'codepipeline'
+
+const repoMatch = process.env['CODEBUILD_SOURCE_REPO_URL']?.match(/:\/*(.*)/)
+
+if (repoMatch == null) {
+    throw new Error(`repo url has unexpected format: ${process.env['CODEBUILD_SOURCE_REPO_URL']}`);
+}
+const repo = repoMatch[1].replace('.git', '');
+if (repo != theRepo) {
+    throw new Error(`repo url is unexpected: ${repo}`);
+}
+
+const versionMatch = process.env['CODEBUILD_WEBHOOK_TRIGGER']?.match(/(tag|branch|pr)\/(.+)/);
+if (versionMatch == null) {
+    throw new Error(`CODEBUILD_WEBHOOK_TRIGGER has an unexpected format: ${process.env['CODEBUILD_WEBHOOK_TRIGGER']}`);
+}
+
+const versionType = versionMatch[1];
+const versionValue = versionMatch[2];
+
+if (versionValue != 'branch') {
+    throw new Error(`CODEBUILD_WEBHOOK_TRIGGER is unexpected: ${process.env['CODEBUILD_WEBHOOK_TRIGGER']}`);
+}
+
+function pipelineName(repoName: string, versionType: string, versionValue: string): string {
+    return `${repoName}/${versionType}/${versionValue}`.replace(/[^0-9a-zA-Z_-]/g, '_');
 }
 
 
@@ -41,13 +64,13 @@ export class MyPipelineStack extends cdk.Stack {
     super(scope, id, props);
 
     const pipeline = new CodePipeline(this, 'Pipeline', {
-      pipelineName: 'MyPipeline',
+      pipelineName: pipelineName(repo!, versionType!, versionValue!),
       synth: new ShellStep('Synth', {
-        input: CodePipelineSource.gitHub('andkononykhin/test-actions', process.env['CODEBUILD_WEBHOOK_TRIGGER'], {
+        input: CodePipelineSource.gitHub(theRepo, versionValue, {
          authentication: cdk.SecretValue.secretsManager('github-access-token-secret'),
         }),
-        commands: ['cd pipeline', 'npm ci', 'npm run build', 'npx cdk synth'],
-        primaryOutputDirectory: 'pipeline/cdk.out' // ref: https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.pipelines-readme.html#synth-and-sources
+        commands: [`cd ${codePipelineDir}`, 'npm ci', 'npm run build', 'npx cdk synth'],
+        primaryOutputDirectory: '${codePipelineDir}/cdk.out' // ref: https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.pipelines-readme.html#synth-and-sources
       })
     });
 
