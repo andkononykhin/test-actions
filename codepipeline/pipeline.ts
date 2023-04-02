@@ -29,7 +29,7 @@ if (versionMatch == null) {
 const versionType = versionMatch[1];
 const versionValue = versionMatch[2];
 
-if (versionValue != 'branch') {
+if (versionType != 'branch') {
     throw new Error(`WEBHOOK_TRIGGER is unexpected: ${process.env['WEBHOOK_TRIGGER']}`);
 }
 
@@ -78,13 +78,11 @@ export class MyPipelineStack extends cdk.Stack {
             'SOURCE_REPO_URL': `://andkononykhin/${source.sourceAttribute('RepositoryName')}`, // FIXME
         },
         commands: [`cd ${codePipelineDir}`, 'npm ci', 'npm run build', 'npx cdk synth'],
-        primaryOutputDirectory: '${codePipelineDir}/cdk.out' // ref: https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.pipelines-readme.html#synth-and-sources
+        primaryOutputDirectory: `${codePipelineDir}/cdk.out` // ref: https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.pipelines-readme.html#synth-and-sources
       })
     });
 
-    pipeline.addStage(new MyPipelineAppStage(this, "test", {
-      env: { account: "111111111111", region: "eu-west-1" }
-    }));
+    pipeline.addStage(new MyPipelineAppStage(this, "test", {}));
   }
 }
 
