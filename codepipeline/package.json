@@ -17,6 +17,7 @@
     "ts-jest": "^29.0.5"
   },
   "dependencies": {
+    "@awesome-cdk/cdk-report-codepipeline-status-to-github": "^1.1.0",
     "@types/node": "^18.15.10",
     "aws-cdk-lib": "2.70.0",
     "constructs": "^10.0.0",

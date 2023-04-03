@@ -5,6 +5,7 @@ import { Function, InlineCode, Runtime, AssetCode, Code, FunctionUrlAuthType } f
 import 'source-map-support/register';
 
 import { CodePipeline, CodePipelineSource, ShellStep } from 'aws-cdk-lib/pipelines';
+import {CodePipelinePostToGitHub} from "@awesome-cdk/cdk-report-codepipeline-status-to-github";
 
 const theRepo = 'andkononykhin/test-actions'
 const codePipelineDir = 'codepipeline'
@@ -63,6 +64,8 @@ export class MyPipelineAppStage extends cdk.Stage {
 
 
 export class MyPipelineStack extends cdk.Stack {
+  pipeline: CodePipeline;
+
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
@@ -70,7 +73,7 @@ export class MyPipelineStack extends cdk.Stack {
         authentication: cdk.SecretValue.secretsManager('github-access-token-secret'), // FIXME
     })
 
-    const pipeline = new CodePipeline(this, 'Pipeline', {
+    this.pipeline = new CodePipeline(this, 'Pipeline', {
       pipelineName: pipelineName(repo!, versionType!, versionValue!),
       synth: new ShellStep('Synth', {
         input: source,
@@ -83,7 +86,7 @@ export class MyPipelineStack extends cdk.Stack {
       })
     });
 
-    pipeline.addStage(new MyPipelineAppStage(this, "test", {}), {
+    this.pipeline.addStage(new MyPipelineAppStage(this, "test", {}), {
         pre: [
             new ShellStep('validate', {
               input: source,
@@ -95,6 +98,14 @@ export class MyPipelineStack extends cdk.Stack {
 }
 
 const app = new cdk.App();
-new MyPipelineStack(app, 'MyPipelineStack', {});
+const pipelineStack = new MyPipelineStack(app, 'MyPipelineStack', {});
+
+pipelineStack.pipeline.buildPipeline()
+
+// Use the construct from this package, passing a "Systems Manager - Parameter Store" where you've previously stored your GitHub "Personal Access Token"
+new CodePipelinePostToGitHub(pipelineStack.pipeline.pipeline, 'CodePipelinePostToGitHub', {
+    pipeline: pipelineStack.pipeline.pipeline,
+    githubToken: cdk.SecretValue.secretsManager('github-access-token-secret').unsafeUnwrap() // FIXME
+});
 
 app.synth();
