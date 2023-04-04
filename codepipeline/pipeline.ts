@@ -1,6 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-//import { PolicyStatement } from "aws-cdk-lib/aws-iam"
 import { Function, InlineCode, Runtime, AssetCode, Code, FunctionUrlAuthType } from "aws-cdk-lib/aws-lambda"
 import 'source-map-support/register';
 
@@ -10,6 +9,8 @@ import {CodePipelinePostToGitHub} from "@awesome-cdk/cdk-report-codepipeline-sta
 const theRepo = 'andkononykhin/test-actions'
 const codePipelineDir = 'codepipeline'
 
+
+// TODO move regex parsing logic to a utility module
 const repoMatch = process.env['SOURCE_REPO_URL']?.match(/:?\/*(.*)/)
 
 if (repoMatch == null) {
@@ -39,17 +40,9 @@ function pipelineName(repoName: string, versionType: string, versionValue: strin
 }
 
 
-export class MyLambdaStack extends cdk.Stack {
+export class BuildStack extends cdk.Stack {
     constructor(scope: Construct, id: string, props?: cdk.StackProps) {
       super(scope, id, props);
-
-      /*
-      new Function(this, 'LambdaFunction', {
-        runtime: Runtime.NODEJS_12_X,
-        handler: 'index.handler',
-        code: new InlineCode('exports.handler = _ => "Hello, CDK";')
-      });
-      */
     }
 }
 
@@ -58,7 +51,7 @@ export class MyPipelineAppStage extends cdk.Stage {
     constructor(scope: Construct, id: string, props?: cdk.StageProps) {
       super(scope, id, props);
 
-      const lambdaStack = new MyLambdaStack(this, 'LambdaStack');
+      const buildStack = new BuildStack(this, 'LambdaStack');
     }
 }
 
@@ -86,6 +79,10 @@ export class MyPipelineStack extends cdk.Stack {
       })
     });
 
+    // TODO overhead: empty stack just for a CodeBuild project
+    //      need to explore how to deploy the project without stage (stack)
+    //      option: use generated pipeline attribute (@aws-cdk/aws-codepipeline » Pipeline)
+    //      and (@aws-cdk/aws-codebuild » PipelineProject)
     this.pipeline.addStage(new MyPipelineAppStage(this, "test", {}), {
         pre: [
             new ShellStep('validate', {
@@ -102,7 +99,6 @@ const pipelineStack = new MyPipelineStack(app, 'MyPipelineStack', {});
 
 pipelineStack.pipeline.buildPipeline()
 
-// Use the construct from this package, passing a "Systems Manager - Parameter Store" where you've previously stored your GitHub "Personal Access Token"
 new CodePipelinePostToGitHub(pipelineStack.pipeline.pipeline, 'CodePipelinePostToGitHub', {
     pipeline: pipelineStack.pipeline.pipeline,
     githubToken: cdk.SecretValue.secretsManager('github-access-token-secret').unsafeUnwrap() // FIXME
