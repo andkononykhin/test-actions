@@ -32,9 +32,10 @@ export class BuildStack extends cdk.Stack {
 }
 
 export class PipelineAppStage extends cdk.Stage {
-    constructor(scope: Construct, id: string, props?: PipelineStageProps) {
+    constructor(scope: Construct, id: string, props: PipelineStageProps) {
         super(scope, id, props);
-        const buildStack = new BuildStack(this, `PipelineStack_{props.pipelineName}`);
+        const buildStack = new BuildStack(
+            this, `PipelineStack-${props.pipelineName.replace(/[^0-9a-zA-Z-]/g, '-')}`); // TODO first letter must be [A-Za-z]
     }
 }
 
