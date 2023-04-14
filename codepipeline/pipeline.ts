@@ -55,9 +55,9 @@ export class PipelineStack extends cdk.Stack {
       synth: new ShellStep('Synth', {
         input: source,
         env: {
-            'REPO_FULL_NAME': repo,
-            'REF_TYPE': refType,
-            'REF': ref 
+            'REPO_FULL_NAME': props.repo,
+            'REF_TYPE': props.refType,
+            'REF': props.ref
         },
         commands: [`cd ${codePipelineDir}`, 'npm ci', 'npm run build', 'npx cdk synth'],
         primaryOutputDirectory: `${codePipelineDir}/cdk.out` // ref: https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.pipelines-readme.html#synth-and-sources
