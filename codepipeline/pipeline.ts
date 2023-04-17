@@ -11,7 +11,7 @@ const ref = process.env['REF'];
 
 console.log(`${repo} ${ref} ${refType}`);
 
-function pipelineName(repo: string, refType: string, ref: string): string {
+function resourcePrefix(repo: string, refType: string, ref: string): string {
     return `${repo}/${refType}/${ref}`.replace(/[^0-9a-zA-Z_-]/g, '_');
 }
 
@@ -22,7 +22,7 @@ interface PipelineStackProps extends cdk.StackProps {
 }
 
 interface PipelineStageProps extends cdk.StageProps {
-    pipelineName: string;
+    resourcePrefix: string;
 }
 
 export class BuildStack extends cdk.Stack {
@@ -35,7 +35,7 @@ export class PipelineAppStage extends cdk.Stage {
     constructor(scope: Construct, id: string, props: PipelineStageProps) {
         super(scope, id, props);
         const buildStack = new BuildStack(
-            this, `PipelineStack-${props.pipelineName.replace(/[^0-9a-zA-Z-]/g, '-')}`); // TODO first letter must be [A-Za-z]
+            this, `PipelineStack-${props.resourcePrefix.replace(/[^0-9a-zA-Z-]/g, '-')}`); // TODO first letter must be [A-Za-z]
     }
 }
 
@@ -45,7 +45,7 @@ export class PipelineStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: PipelineStackProps) {
     super(scope, id, props);
 
-    let _pipelineName = pipelineName(props.repo, props.refType, props.ref);
+    let _pipelineName = resourcePrefix(props.repo, props.refType, props.ref);
 
     const source = CodePipelineSource.gitHub(props.repo, props.ref, {
         authentication: cdk.SecretValue.secretsManager('github-access-token-secret'),
@@ -69,7 +69,7 @@ export class PipelineStack extends cdk.Stack {
     //      need to explore how to deploy the project without stage (stack)
     //      option: use generated pipeline attribute (@aws-cdk/aws-codepipeline » Pipeline)
     //      and (@aws-cdk/aws-codebuild » PipelineProject)
-    this.pipeline.addStage(new PipelineAppStage(this, "BuildStage", { pipelineName: _pipelineName }), {
+    this.pipeline.addStage(new PipelineAppStage(this, "BuildStage", { resourcePrefix: _pipelineName }), {
         pre: [
             new ShellStep('build', {
               input: source,
