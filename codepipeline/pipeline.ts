@@ -4,14 +4,14 @@ import { CodePipeline, CodePipelineSource, ShellStep } from 'aws-cdk-lib/pipelin
 import 'source-map-support/register';
 import {CodePipelinePostToGitHub} from "@awesome-cdk/cdk-report-codepipeline-status-to-github";
 
-const codePipelineDir = 'codepipeline'
-const repo = 'andkononykhin/test-actions'
+const codePipelineDir:string = 'codepipeline'
+const repo = 'RSC-IoT/rsc-backend-deployment-service'
 const refType = process.env['REF_TYPE'];
 const ref = process.env['REF'];
 
 console.log(`${repo} ${ref} ${refType}`);
 
-function resourcePrefix(repo: string, refType: string, ref: string): string {
+function resourcePrefix(): string {
     return `${repo}/${refType}/${ref}`.replace(/[^0-9a-zA-Z_-]/g, '_');
 }
 
@@ -45,7 +45,7 @@ export class PipelineStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: PipelineStackProps) {
     super(scope, id, props);
 
-    let _pipelineName = resourcePrefix(props.repo, props.refType, props.ref);
+    let _pipelineName = resourcePrefix();
 
     const source = CodePipelineSource.gitHub(props.repo, props.ref, {
         authentication: cdk.SecretValue.secretsManager('github-access-token-secret'),
@@ -73,7 +73,7 @@ export class PipelineStack extends cdk.Stack {
         pre: [
             new ShellStep('build', {
               input: source,
-              commands: ['date']  // TODO add build command here
+              commands: ['ls -la']  // TODO add build command here
             })
         ]
     });
@@ -93,13 +93,13 @@ if (ref === undefined || ref.length == 0) {
 console.log(`deploying pipeline for branch '${ref}', repository '${repo}'`)
 
 const app = new cdk.App();
-const pipelineStack = new PipelineStack(app, 'PipelineStack', { repo, refType, ref });
+const pipelineStack = new PipelineStack(app, `PipelineStack-${resourcePrefix().replace(/[^0-9a-zA-Z-]/g, '-')}`, { repo, refType, ref });
 
 pipelineStack.pipeline.buildPipeline()
 
 new CodePipelinePostToGitHub(pipelineStack.pipeline.pipeline, 'CodePipelinePostToGitHub', {
     pipeline: pipelineStack.pipeline.pipeline,
-    githubToken: cdk.SecretValue.secretsManager('github-access-token-secret').unsafeUnwrap() // FIXME
+    githubToken: cdk.SecretValue.secretsManager('github-access-token-secret2').unsafeUnwrap() // FIXME
 });
 
 app.synth();
