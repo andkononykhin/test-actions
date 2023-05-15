@@ -99,7 +99,7 @@ pipelineStack.pipeline.buildPipeline()
 
 new CodePipelinePostToGitHub(pipelineStack.pipeline.pipeline, 'CodePipelinePostToGitHub', {
     pipeline: pipelineStack.pipeline.pipeline,
-    githubToken: cdk.SecretValue.secretsManager('github-access-token-secret2').unsafeUnwrap() // FIXME
+    githubToken: cdk.SecretValue.secretsManager('github-access-token-secret').unsafeUnwrap() // FIXME
 });
 
 app.synth();
