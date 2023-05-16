@@ -6,11 +6,13 @@ import 'source-map-support/register';
 import { CodePipeline, CodePipelineSource, ShellStep } from 'aws-cdk-lib/pipelines';
 import {CodePipelinePostToGitHub} from "@awesome-cdk/cdk-report-codepipeline-status-to-github";
 
-const theRepo = 'andkononykhin/test-actions'
-const codePipelineDir = 'codepipeline'
+const theRepo = 'andkononykhin/test-actions';
+const codePipelineDir = 'codepipeline';
+const repo = theRepo;
 
 
 // TODO move regex parsing logic to a utility module
+/*
 const repoMatch = process.env['SOURCE_REPO_URL']?.match(/:?\/*(.*)/)
 
 if (repoMatch == null) {
@@ -30,6 +32,10 @@ if (versionMatch == null) {
 
 const versionType = versionMatch[1];
 const versionValue = versionMatch[2];
+*/
+
+const versionType = 'branch';
+const versionValue = 'test-ci-01';
 
 if (versionType != 'branch') {
     throw new Error(`WEBHOOK_TRIGGER is unexpected: ${process.env['WEBHOOK_TRIGGER']}`);
