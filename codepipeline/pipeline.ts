@@ -1,4 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 
 import { Construct } from 'constructs';
 import { Function, InlineCode, Runtime, AssetCode, Code, FunctionUrlAuthType } from "aws-cdk-lib/aws-lambda"
@@ -70,7 +71,7 @@ export class MyPipelineStack extends cdk.Stack {
     super(scope, id, props);
 
     const source = CodePipelineSource.gitHub(theRepo, versionValue, {
-        authentication: cdk.SecretValue.secretsManager('github-access-token-secret'), // FIXME
+        authentication: cdk.SecretValue.secretsManager('github-access-token-secret05'), // FIXME
     })
 
     this.pipeline = new CodePipeline(this, 'Pipeline', {
@@ -112,7 +113,7 @@ pipelineStack.pipeline.buildPipeline()
 
 new CodePipelinePostToGitHub(pipelineStack.pipeline.pipeline, 'CodePipelinePostToGitHub', {
     pipeline: pipelineStack.pipeline.pipeline,
-    githubToken: cdk.SecretValue.secretsManager('github-access-token-secret').unsafeUnwrap() // FIXME
+    githubToken: cdk.SecretValue.secretsManager('github-access-token-secret05').unsafeUnwrap() // FIXME
 });
 
 app.synth();
