@@ -37,7 +37,7 @@ const versionValue = versionMatch[2];
 */
 
 const versionType = 'branch';
-const versionValue = 'test-ci-01';
+const versionValue = 'test-ci-02';
 
 if (versionType != 'branch') {
     throw new Error(`WEBHOOK_TRIGGER is unexpected: ${process.env['WEBHOOK_TRIGGER']}`);
