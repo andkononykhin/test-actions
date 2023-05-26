@@ -75,6 +75,10 @@ export class MyPipelineStack extends cdk.Stack {
 
     this.pipeline = new CodePipeline(this, 'Pipeline', {
       pipelineName: pipelineName(repo!, versionType!, versionValue!),
+      artifactBucket: s3.Bucket.fromBucketName(
+          this, 'ArtifactBucket',
+          'rsc-iot-rsc-platform-afr-pipelineartifactsbucketa-1ox7y7qmllyed' // FIXME
+      ),
       synth: new ShellStep('Synth', {
         input: source,
         env: {
